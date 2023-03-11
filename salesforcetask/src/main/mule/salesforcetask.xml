@@ -69,10 +69,10 @@ flatten((value.cases map ((item, index) ->{
     body: {
         Description: item.description,
         CreatedDateExt__c: if(!isEmpty(item.createdDate)) 
-                        item.createdDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+                        item.createdDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime >> "UTC"
                		  	else null,
         ClosedDateExt__c: if(!isEmpty(item.closedDate)) 
-               		    item.closedDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+               		    item.closedDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime >> "UTC"
                			else null,
         ExternalID__c: item.recordID,
         ContactId:  (vars.sfdc_contact filter ($.ExternalID__c contains  value.recordID) reduce $).Id,
@@ -123,10 +123,10 @@ flatten((value.cases map ((item, index) ->{
     body: {
         Description: item.description,
         CreatedDateExt__c: if(!isEmpty(item.createdDate)) 
-                        item.createdDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+                        item.createdDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime >> "UTC"
                		  	else null,
         ClosedDateExt__c: if(!isEmpty(item.closedDate)) 
-               		    item.closedDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+               		    item.closedDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime >> "UTC"
                			else null,
         ExternalID__c: item.recordID,
         ContactId:  "@{" ++ value.recordID ++ ".id}",
