@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+	<validation:config name="Validation_Config" doc:name="Validation Config" doc:id="1eb07012-985e-4e00-8ec9-f5a597d60411"/>
+	<flow name="salesforcetaskFlow" doc:id="6b537c37-c2aa-4ea0-975b-dc167007445c" >
+		<http:listener doc:name="Listener" doc:id="f0efc728-df35-4b06-b8aa-43ca7f231bfc" path="${http.path}" config-ref="HTTP_Listener_config"/>
+		<logger level="INFO" doc:name="START Logger" doc:id="4d9bb976-d966-4d5d-a837-c03bad2e7aa0" message="START ssalefoceTask Flow"/>
+		<ee:transform doc:name="Save inputPayload to variable" doc:id="2170c894-3c1f-4c76-9a9d-7a533ca8a9a6">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="inputPayload"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="getAccountFromSFDC_Sub_Flow" doc:id="55a67d28-d682-41f6-9ade-f670e2089013" name="getAccountFromSFDC_Sub_Flow"/>
+		<flow-ref doc:name="getContactFromSFDC_Sub_Flow" doc:id="2cffb44d-cbb8-48b2-8a3f-ba9aa0acd20b" name="getContactFromSFDC_Sub_Flow"/>
+		<flow-ref doc:name="getCaseFromSFDC_Sub_Flow" doc:id="3b926590-a702-4721-b7c8-6a5aa3eae38c" name="getCaseFromSFDC_Sub_Flow"/>
+		<choice doc:name="Is Account precent is SFDC?" doc:id="22027010-fef0-4ec5-adce-33c1b2f0b41f">
+			<when expression="#[if(vars.sfdc_account.ExternalID__c contains  vars.inputPayload.recordID) true else false // IF TRUE WILL PATCH COMPOSTITE GRAPH]">
+				<ee:transform doc:name="prepare mapping" doc:id="5f23fddc-91ab-4b8b-8eb9-28677216296c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+//fetching AccountId from SFDC
+var accountId =  (vars.sfdc_account filter ($.ExternalID__c contains  vars.inputPayload.recordID)).Id reduce ($++$$)
+ 
+---
+// Transform to Composite Graph
+[{
+graphId: uuid(),
+compositeRequest:
+[{
+     method: "PATCH",
+    referenceId: payload.recordID,
+    url: "/services/data/v54.0/sobjects/Account/" ++ accountId,
+    body:{
+        Name: payload.name,
+        ExternalID__c:payload.recordID
+    }
+
+}] ++ flatten (payload.contacts map ((value, index) -> {
+    method: "PATCH",
+    referenceId: value.recordID,
+    url: "/services/data/v54.0/sobjects/Contact/" ++ (vars.sfdc_contact filter ($.ExternalID__c contains  value.recordID) reduce $).Id, // Here we catch ContactId using filter from SFDC_contacts array,
+    body: {
+        FirstName: value.name,
+		Email: value.email,
+		LastName: value.surname,
+        ExternalID__c: value.recordID as String,
+		AccountId: accountId
+    }})) ++
+
+flatten (payload.contacts map ((value, index) ->
+flatten((value.cases map ((item, index) ->{
+    method: "PATCH",
+    referenceId: item.recordID,
+    url: "/services/data/v54.0/sobjects/Case/" ++ (vars.sfdc_case filter ($.ExternalID__c contains  item.recordID) reduce $).Id,
+    body: {
+        Description: item.description,
+        CreatedDateExt__c: if(!isEmpty(item.createdDate)) 
+                        item.createdDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+               		  	else null,
+        ClosedDateExt__c: if(!isEmpty(item.closedDate)) 
+               		    item.closedDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+               			else null,
+        ExternalID__c: item.recordID,
+        ContactId:  (vars.sfdc_contact filter ($.ExternalID__c contains  value.recordID) reduce $).Id,
+        }
+} ))) 
+ ) 
+)}]]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="prepare mapping" doc:id="47bafcc7-ae32-43a9-9384-371834931c20" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+
+---
+// Transform to Composite Graph
+[{
+graphId: uuid(),
+compositeRequest:
+[{
+     method: "POST",
+    referenceId: payload.recordID,
+    url: "/services/data/v54.0/sobjects/Account/",
+    body:{
+        Name: payload.name,
+        ExternalID__c:payload.recordID
+    }
+
+}] ++ flatten (payload.contacts map ((value, index) -> {
+    method: "POST",
+    referenceId: value.recordID,
+    url: "/services/data/v54.0/sobjects/Contact/",
+    body: {
+        FirstName: value.name,
+		Email: value.email,
+		LastName: value.surname,
+        ExternalID__c: value.recordID as String,
+		AccountId: "@{" ++ payload.recordID ++ ".id}"
+    }})) ++
+
+flatten (payload.contacts map ((value, index) ->
+flatten((value.cases map ((item, index) ->{
+    method: "POST",
+    referenceId: item.recordID,
+    url: "/services/data/v54.0/sobjects/Case/",
+    body: {
+        Description: item.description,
+        CreatedDateExt__c: if(!isEmpty(item.createdDate)) 
+                        item.createdDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+               		  	else null,
+        ClosedDateExt__c: if(!isEmpty(item.closedDate)) 
+               		    item.closedDate as LocalDateTime {format:"MM/dd/yyyy' 'HH:mm:ss.SSS"} as DateTime
+               			else null,
+        ExternalID__c: item.recordID,
+        ContactId:  "@{" ++ value.recordID ++ ".id}",
+        }
+} ))) 
+ ) 
+)}]]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<flow-ref doc:name="compositeGraphSFDC_Sub_Flow" doc:id="e30c538d-5a96-4e13-8bfc-f35b9641d08b" name="compositeGraphSFDC_Sub_Flow"/>
+		<ee:transform doc:name="to JSON" doc:id="a31acaf1-8455-4950-81ed-9e6292e882c7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="END Logger" doc:id="6002f524-5873-44fd-b20b-87165980f525" message="END ssalefoceTask Flow" />
+	</flow>
+	<sub-flow name="getAccountFromSFDC_Sub_Flow" doc:id="2dab26a5-25df-457d-9ed5-e9fe81c15135" >
+		<logger level="INFO" doc:name="Before SFDC request Logger" doc:id="ac9ffb63-7f2a-4bec-9451-5a9031d83a8e" message="Before SFDC GET Account Request"/>
+		<salesforce:query doc:name="Get Accounts from SFDC" doc:id="80fb04b7-69a3-40bd-9895-13ee078db78a" config-ref="Salesforce_Config" target="sfdc_account">
+			<salesforce:salesforce-query><![CDATA[select ID, Name, ExternalID__c
+FROM Account
+Where ExternalID__c <> null]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<logger level="INFO" doc:name="After SFDC request Logger" doc:id="962e6934-a400-4507-b851-b481b1479406" message="After  SFDC GET Account Request" />
+	</sub-flow>
+	<sub-flow name="compositeGraphSFDC_Sub_Flow" doc:id="4fecb768-3c2b-4fb0-9762-b7d41778f132" >
+		<logger level="INFO" doc:name="Before SFDC Composte Graph Execution request Logger" doc:id="39cf5b90-3bcf-4527-9986-f87517abfe8c" message="Before SFDC Composte Graph Execution Request" />
+		<salesforce-composite:execute-composite-graph doc:name="Execute composite graph" doc:id="90aaad39-0e13-4778-b866-ad18c31270ab" config-ref="Salesforce_Composite_Config" />
+		<logger level="INFO" doc:name="After Composte Graph Execution Request Logger" doc:id="abc5e16a-78f5-43f6-b65d-0b1df9c01bcc" message="After  Composte Graph Execution  Request" />
+	</sub-flow>
+	<sub-flow name="getContactFromSFDC_Sub_Flow" doc:id="c6304bf7-9a7f-447b-b1c6-db0d98dd5f67" >
+		<logger level="INFO" doc:name="Before SFDC request Logger" doc:id="d93b43fb-f110-4657-836c-e8c1f47c0938" message="Before SFDC GET Contact Request" />
+		<salesforce:query doc:name="Get Contacts from SFDC" doc:id="c4b9b565-c141-4173-b227-3871265221f6" config-ref="Salesforce_Config" target="sfdc_contact">
+			<salesforce:salesforce-query><![CDATA[select Id, AccountId, ExternalID__c
+from Contact]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<logger level="INFO" doc:name="After SFDC request Logger" doc:id="b6b7bc5b-2bd0-4633-961c-56792b08269e" message="After  SFDC GET Contact Request" />
+	</sub-flow>
+	<sub-flow name="getCaseFromSFDC_Sub_Flow" doc:id="5218c4b0-dd8f-4296-8f9c-4adc9762700b" >
+		<logger level="INFO" doc:name="Before SFDC request Logger" doc:id="38ccf0f2-de20-49e6-a354-7871ecb07e11" message="Before SFDC GET Case Request" />
+		<salesforce:query doc:name="Get Cases from SFDC" doc:id="f852b96e-e344-4d7f-bdad-0ae3212eed0a" config-ref="Salesforce_Config" target="sfdc_case">
+			<salesforce:salesforce-query><![CDATA[select Id, AccountId, ContactId, ExternalID__c
+from Case]]></salesforce:salesforce-query>
+		</salesforce:query>
+		<logger level="INFO" doc:name="After SFDC request Logger" doc:id="e6cc1aa1-295e-4ee0-add4-37655772e62d" message="After  SFDC GET Case Request" />
+	</sub-flow>
+</mule>

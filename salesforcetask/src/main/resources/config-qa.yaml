@@ -1,0 +1,15 @@
+api:
+  name: "mulecata-sys-one" # replace with name of your API
+  id: "1" #replace with autodiscovery id from Anypoint Platform
+  version: "v1"
+  
+http:
+  path: "/api/${api.version}/*"
+  host: "0.0.0.0"
+  timeout: '5000' 
+  port: "8082"
+  private:
+    port: "8091"
+    
+
+

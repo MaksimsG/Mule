@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="e80728a1-3023-4eb2-b5ee-01dc5c652e13" >
+		<http:listener-connection host="0.0.0.0" port="${http.port}" />
+	</http:listener-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="949743ee-6ee2-40f3-8314-d15ffb8477d8" file="config-${mule.env}.yaml" />
+	<global-property doc:name="Global Property" doc:id="3920ca84-4d8c-429c-a63b-3a04d9a00d10" name="mule.env" value="${env}" />
+	<global-property doc:name="Global Property" doc:id="ba7aa88a-10b1-4fdf-bb45-124031ec4d35" name="mule.key" value="mulesoft" />
+	<api-gateway:autodiscovery apiId="${api.id}" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="8ef0b4cf-df20-49bf-b49a-64447de39b17" flowRef="salesforcetaskFlow" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="0ab25cf9-e7f4-41d5-86f5-bf5f073aa049" file="config-secure-${mule.env}.yaml" key="${mule.key}" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config" doc:id="ed5d89f2-ea4d-4627-85ca-eb7370ada5ec" >
+		<salesforce:oauth-user-pass-connection consumerKey="${secure::sfdc.keyid}" consumerSecret="${secure::sfdc.secretid}" username="${secure::sfdc.username}" password="${secure::sfdc.password}" securityToken="${secure::sfdc.token}" />
+	</salesforce:sfdc-config>
+	<salesforce-composite:composite-config name="Salesforce_Composite_Config" doc:name="Salesforce Composite Config" doc:id="d2eb8eb2-fbd9-4558-8904-225920fd280d" >
+		<salesforce-composite:oauth-user-pass-connection consumerKey="${secure::sfdc.keyid}" consumerSecret="${secure::sfdc.secretid}" username="${secure::sfdc.username}" password="${secure::sfdc.password}" securityToken="${secure::sfdc.token}" />
+	</salesforce-composite:composite-config>
+</mule>
